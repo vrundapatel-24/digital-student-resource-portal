@@ -4,7 +4,7 @@
    CONFIGURATION
 ===================================================== */
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = "https://digital-student-resource-portal.onrender.com/api";
 
 
 /* =====================================================
@@ -3317,7 +3317,7 @@ if (examForm) {
             document.getElementById("examDate").value;
 
         const reminderEnabled =
-            document.getElementById("examReminder").checked;
+            document.getElementById("examReminder").checked;.
 
         if (!title) {
             showToast(

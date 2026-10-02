@@ -3316,8 +3316,7 @@ if (examForm) {
         const examDate =
             document.getElementById("examDate").value;
 
-        const reminderEnabled =
-            document.getElementById("examReminder").checked;.
+        const reminderEnabled = document.getElementById("examReminder").checked;
 
         if (!title) {
             showToast(

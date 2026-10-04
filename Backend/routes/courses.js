@@ -27,83 +27,131 @@ router.get("/", async (req, res) => {
         const bucket =
             process.env.S3_BUCKET_NAME;
 
-
-        const command =
-            new ListObjectsV2Command({
-                Bucket: bucket,
-                Prefix: "course/"
-            });
-
-
-        const response =
-            await s3.send(command);
-
-
-        const objects =
-            response.Contents || [];
-
-
         const courses = [];
         const files = [];
 
+        let continuationToken = undefined;
 
-        for (const object of objects) {
+        do {
 
-            const key =
-                object.Key;
+            const command =
+                new ListObjectsV2Command({
 
+                    Bucket: bucket,
 
-            if (!key || key === "course/") {
-                continue;
-            }
+                    Prefix: "course/",
 
+                    ContinuationToken:
+                        continuationToken
 
-            const relativePath =
-                key.replace("course/", "");
+                });
 
+            const response =
+                await s3.send(command);
 
-            const parts =
-                relativePath.split("/");
-
-
-            if (parts.length > 1) {
-
-                const courseName =
-                    parts[0];
+            const objects =
+                response.Contents || [];
 
 
-                const coursePrefix =
-                    `course/${courseName}/`;
+            for (const object of objects) {
 
+                const key =
+                    object.Key;
 
                 if (
-                    !courses.some(
-                        course =>
-                            course.name === courseName
-                    )
+                    !key ||
+                    key === "course/"
                 ) {
-
-                    courses.push({
-
-                        name: courseName,
-
-                        prefix: coursePrefix
-
-                    });
-
+                    continue;
                 }
 
 
-                if (!key.endsWith("/")) {
+                const relativePath =
+                    key.replace("course/", "");
+
+                const parts =
+                    relativePath.split("/");
+
+
+                /*
+                 * Example:
+                 *
+                 * course/Cloud Computing/file.pdf
+                 *
+                 * parts:
+                 * ["Cloud Computing", "file.pdf"]
+                 */
+
+                if (parts.length > 1) {
+
+                    const courseName =
+                        parts[0];
+
+                    const coursePrefix =
+                        `course/${courseName}/`;
+
+
+                    /*
+                     * Add course only once
+                     */
+
+                    if (
+                        !courses.some(
+                            course =>
+                                course.name === courseName
+                        )
+                    ) {
+
+                        courses.push({
+
+                            name: courseName,
+
+                            prefix: coursePrefix
+
+                        });
+
+                    }
+
+
+                    /*
+                     * Add actual file
+                     */
+
+                    if (!key.endsWith("/")) {
+
+                        files.push({
+
+                            course: courseName,
+
+                            name:
+                                parts
+                                    .slice(1)
+                                    .join("/"),
+
+                            key: key,
+
+                            size:
+                                object.Size || 0,
+
+                            lastModified:
+                                object.LastModified || null
+
+                        });
+
+                    }
+
+                } else {
+
+                    /*
+                     * Files directly inside
+                     * course/ folder
+                     */
 
                     files.push({
 
-                        course: courseName,
+                        course: null,
 
-                        name:
-                            parts
-                                .slice(1)
-                                .join("/"),
+                        name: relativePath,
 
                         key: key,
 
@@ -117,27 +165,27 @@ router.get("/", async (req, res) => {
 
                 }
 
-            } else {
-
-                files.push({
-
-                    course: null,
-
-                    name: relativePath,
-
-                    key: key,
-
-                    size:
-                        object.Size || 0,
-
-                    lastModified:
-                        object.LastModified || null
-
-                });
-
             }
 
-        }
+
+            continuationToken =
+                response.IsTruncated
+                    ? response.NextContinuationToken
+                    : undefined;
+
+        } while (continuationToken);
+
+
+        /*
+         * Sort courses alphabetically
+         */
+
+        courses.sort(
+            (a, b) =>
+                a.name.localeCompare(
+                    b.name
+                )
+        );
 
 
         res.json({
@@ -173,8 +221,6 @@ router.get("/", async (req, res) => {
     }
 
 });
-
-
 /* =====================================================
    GET COURSE FILE URL
    mode = view / download

@@ -6,6 +6,61 @@
 
 const API_BASE = "https://digital-student-resource-portal.onrender.com/api";
 
+/* =====================================================
+   PERSONAL MY STUDY STORAGE
+===================================================== */
+
+const PERSONAL_STUDY_KEY =
+    "dsrp_personal_my_study_v1";
+
+function getPersonalStudyData() {
+    try {
+        const saved =
+            localStorage.getItem(
+                PERSONAL_STUDY_KEY
+            );
+
+        if (!saved) {
+            return {
+                tasks: [],
+                exams: []
+            };
+        }
+
+        const data = JSON.parse(saved);
+
+        return {
+            tasks: Array.isArray(data.tasks)
+                ? data.tasks
+                : [],
+
+            exams: Array.isArray(data.exams)
+                ? data.exams
+                : []
+        };
+
+    } catch (error) {
+        console.error(
+            "Personal My Study data error:",
+            error
+        );
+
+        return {
+            tasks: [],
+            exams: []
+        };
+    }
+}
+
+function savePersonalStudyData() {
+    localStorage.setItem(
+        PERSONAL_STUDY_KEY,
+        JSON.stringify({
+            tasks: state.tasks,
+            exams: state.exams
+        })
+    );
+}
 
 /* =====================================================
    GLOBAL STATE
@@ -461,7 +516,10 @@ async function loadDashboardData() {
 
 
         state.courses =
-            extractArray(coursesResponse);
+            coursesResponse.status === "fulfilled" &&
+            Array.isArray(coursesResponse.value?.courses)
+              ? coursesResponse.value.courses
+              : [];
 
         state.resources =
             extractArray(resourcesResponse);
@@ -510,6 +568,10 @@ function extractArray(result) {
         if (Array.isArray(value)) {
             return value;
         }
+       
+        if (Array.isArray(value?.courses)) {
+            return value.courses;
+        } 
 
         if (Array.isArray(value?.data)) {
             return value.data;
@@ -2467,31 +2529,25 @@ async function handleStudyTaskSubmit(event) {
 
     event.preventDefault();
 
-
     const input =
         document.getElementById(
             "studyTaskInput"
         );
-
 
     const button =
         document.getElementById(
             "addStudyTaskBtn"
         );
 
-
     const message =
         document.getElementById(
             "studyTaskMessage"
         );
 
-
     if (!input) return;
-
 
     const title =
         input.value.trim();
-
 
     if (!title) {
 
@@ -2502,12 +2558,9 @@ async function handleStudyTaskSubmit(event) {
         );
 
         return;
-
     }
 
-
     button.disabled = true;
-
 
     setFormMessage(
         message,
@@ -2515,33 +2568,47 @@ async function handleStudyTaskSubmit(event) {
         ""
     );
 
-
     try {
 
-        const response =
-            await apiRequest(
-                "/study/tasks",
-                {
-                    method: "POST",
+        /*
+         * Create a personal task.
+         * This task is stored only in this browser.
+         */
 
-                    body: JSON.stringify({
-                        title
-                    })
-                }
-            );
+        const now =
+            new Date().toISOString();
+
+        const newTask = {
+
+            id: Date.now(),
+
+            title: title,
+
+            description: "",
+
+            date: null,
+
+            time: null,
+
+            completed: 0,
+
+            completed_at: null,
+
+            created_at: now,
+
+            updated_at: now
+
+        };
 
 
-        const newTask =
-            response?.data ||
-            response?.task ||
-            response;
+        /*
+         * Add task to current user's
+         * personal study data.
+         */
 
+        state.tasks.push(newTask);
 
-        if (newTask && typeof newTask === "object") {
-
-            state.tasks.push(newTask);
-
-        }
+        savePersonalStudyData();
 
 
         input.value = "";
@@ -2560,18 +2627,25 @@ async function handleStudyTaskSubmit(event) {
         );
 
 
+        /*
+         * Refresh Study Center
+         */
+
         await loadStudyCenter();
 
 
     } catch (error) {
 
+        console.error(
+            "Personal task error:",
+            error
+        );
+
         setFormMessage(
             message,
-            error.message ||
             "Failed to add study task.",
             "error"
         );
-
 
         showToast(
             "Failed to add study task.",
@@ -2585,8 +2659,6 @@ async function handleStudyTaskSubmit(event) {
     }
 
 }
-
-
 /* =====================================================
    LOAD STUDY CENTER
 ===================================================== */
@@ -2595,38 +2667,54 @@ async function loadStudyCenter() {
 
     try {
 
-        const results =
-            await Promise.allSettled([
+        /*
+         * My Study is personal.
+         * Load tasks and exams only from this browser.
+         */
 
-                apiRequest("/study/tasks"),
-                apiRequest("/study/progress"),
-                apiRequest("/study/streak"),
-                apiRequest("/exams")
-
-            ]);
-
+        const personalData =
+            getPersonalStudyData();
 
         state.tasks =
-            extractArray(results[0]);
-
-        state.progress =
-            extractObject(results[1]);
-
-        state.streak =
-            extractObject(results[2]);
+            personalData.tasks;
 
         state.exams =
-            extractArray(results[3]);
+            personalData.exams;
 
-        console.log(
-            "EXAM API RESULT:",
-            results[3]
-        );
 
-        console.log(
-            "EXAM DATA:",
-            state.exams
-        );
+        /*
+         * Progress and streak are calculated
+         * from this user's personal tasks.
+         */
+
+        const completedTasks =
+            state.tasks.filter(
+                task => isTaskCompleted(task)
+            ).length;
+
+        const totalTasks =
+            state.tasks.length;
+
+        const progressPercentage =
+            totalTasks > 0
+                ? Math.round(
+                    (completedTasks / totalTasks) * 100
+                )
+                : 0;
+
+
+        state.progress = {
+            success: true,
+            progress: progressPercentage,
+            completed: completedTasks,
+            total: totalTasks
+        };
+
+
+        state.streak = {
+            success: true,
+            streak: completedTasks
+        };
 
 
         renderStudyTasks();
@@ -2637,8 +2725,12 @@ async function loadStudyCenter() {
 
         updateDashboardUI();
 
-
     } catch (error) {
+
+        console.error(
+            "Personal Study Center error:",
+            error
+        );
 
         showToast(
             "Failed to load Study Center.",
@@ -2647,10 +2739,7 @@ async function loadStudyCenter() {
 
     }
 
-}
-
-
-/* =====================================================
+}/* =====================================================
    STUDY TASKS RENDER
 ===================================================== */
 
@@ -3316,7 +3405,8 @@ if (examForm) {
         const examDate =
             document.getElementById("examDate").value;
 
-        const reminderEnabled = document.getElementById("examReminder").checked;
+        const reminderEnabled =
+            document.getElementById("examReminder").checked;
 
         if (!title) {
             showToast(
@@ -4691,6 +4781,51 @@ window.deleteStudyTask =
 window.editExam =
     editExam;
 
-window.deleteExam =
-    deleteExam;
+window.deleteExam = function (id) {
 
+    const examIndex =
+        state.exams.findIndex(
+            exam =>
+                Number(exam.id) ===
+                Number(id)
+        );
+
+    if (examIndex === -1) {
+
+        showToast(
+            "Exam not found.",
+            "error"
+        );
+
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            "Are you sure you want to delete this exam?"
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    state.exams.splice(
+        examIndex,
+        1
+    );
+
+    savePersonalStudyData();
+
+    renderExams();
+
+    renderDashboardExams();
+
+    updateStudyCenterStats();
+
+    updateDashboardUI();
+
+    showToast(
+        "Exam deleted successfully.",
+        "success"
+    );
+};

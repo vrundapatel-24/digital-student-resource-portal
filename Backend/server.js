@@ -21,11 +21,13 @@ const examRoutes = require("./routes/exams");
 const courseRoutes = require("./routes/courses");
 const resourceRoutes = require("./routes/resources");
 const practicalRoutes = require("./routes/practical");
+const authRoutes = require("./routes/auth");
 app.use("/api/study", studyRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/api/practical", practicalRoutes);
+app.use("/api/auth", authRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({

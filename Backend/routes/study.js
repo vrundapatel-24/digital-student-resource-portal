@@ -1,7 +1,10 @@
 const express = require("express");
 const db = require("../database");
+const authenticateToken = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.use(authenticateToken);
 
 // ==========================================
 // GET ALL STUDY TASKS
@@ -21,6 +24,7 @@ router.get("/tasks", (req, res) => {
       created_at,
       updated_at
     FROM study_tasks
+    WHERE user_id = ?
     ORDER BY
       CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END,
       date ASC,
@@ -28,7 +32,7 @@ router.get("/tasks", (req, res) => {
       id DESC
   `;
 
-  db.all(sql, [], (err, rows) => {
+  db.all(sql, [req.user.userId], (err, rows) => {
     if (err) {
       console.error("Error fetching study tasks:", err.message);
 
@@ -46,7 +50,6 @@ router.get("/tasks", (req, res) => {
   });
 });
 
-
 // ==========================================
 // ADD NEW STUDY TASK
 // POST /api/study/tasks
@@ -60,7 +63,6 @@ router.post("/tasks", (req, res) => {
     time = null
   } = req.body;
 
-  // Validate title
   if (!title || !String(title).trim()) {
     return res.status(400).json({
       success: false,
@@ -69,6 +71,7 @@ router.post("/tasks", (req, res) => {
   }
 
   const cleanTitle = String(title).trim();
+
   const cleanDescription = description
     ? String(description).trim()
     : "";
@@ -83,9 +86,10 @@ router.post("/tasks", (req, res) => {
       description,
       date,
       time,
-      completed
+      completed,
+      user_id
     )
-    VALUES (?, ?, ?, ?, 0)
+    VALUES (?, ?, ?, ?, 0, ?)
   `;
 
   db.run(
@@ -94,7 +98,8 @@ router.post("/tasks", (req, res) => {
       cleanTitle,
       cleanDescription,
       cleanDate,
-      cleanTime
+      cleanTime,
+      req.user.userId
     ],
     function (err) {
       if (err) {
@@ -122,8 +127,9 @@ router.post("/tasks", (req, res) => {
           updated_at
         FROM study_tasks
         WHERE id = ?
+        AND user_id = ?
         `,
-        [taskId],
+        [taskId, req.user.userId],
         (selectErr, task) => {
           if (selectErr) {
             console.error(
@@ -147,7 +153,6 @@ router.post("/tasks", (req, res) => {
     }
   );
 });
-
 
 // ==========================================
 // MARK TASK COMPLETED / INCOMPLETE
@@ -179,11 +184,13 @@ router.patch("/tasks/:id/completed", (req, res) => {
       completed_at = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
+    AND user_id = ?
     `,
     [
       completedValue,
       completedAt,
-      taskId
+      taskId,
+      req.user.userId
     ],
     function (err) {
       if (err) {
@@ -219,8 +226,9 @@ router.patch("/tasks/:id/completed", (req, res) => {
           updated_at
         FROM study_tasks
         WHERE id = ?
+        AND user_id = ?
         `,
-        [taskId],
+        [taskId, req.user.userId],
         (selectErr, task) => {
           if (selectErr) {
             return res.status(500).json({
@@ -242,7 +250,6 @@ router.patch("/tasks/:id/completed", (req, res) => {
   );
 });
 
-
 // ==========================================
 // DELETE STUDY TASK
 // DELETE /api/study/tasks/:id
@@ -262,8 +269,9 @@ router.delete("/tasks/:id", (req, res) => {
     `
     DELETE FROM study_tasks
     WHERE id = ?
+    AND user_id = ?
     `,
-    [taskId],
+    [taskId, req.user.userId],
     function (err) {
       if (err) {
         console.error(
@@ -291,22 +299,22 @@ router.delete("/tasks/:id", (req, res) => {
     }
   );
 });
+
 // ==========================================
 // GET STUDY STREAK
 // GET /api/study/streak
 // ==========================================
 
 router.get("/streak", (req, res) => {
-
   db.get(
     `
     SELECT COUNT(*) AS streak
     FROM study_tasks
     WHERE completed = 1
+    AND user_id = ?
     `,
-    [],
+    [req.user.userId],
     (err, row) => {
-
       if (err) {
         console.error(
           "Error calculating study streak:",
@@ -319,32 +327,40 @@ router.get("/streak", (req, res) => {
         });
       }
 
-      const streak = Number(row?.streak || 0);
-
       res.json({
         success: true,
-        streak
+        streak: Number(row?.streak || 0)
       });
-
     }
   );
-
 });
-// GET /api/study/progress
-router.get("/progress", (req, res) => {
 
+// ==========================================
+// GET STUDY PROGRESS
+// GET /api/study/progress
+// ==========================================
+
+router.get("/progress", (req, res) => {
   db.get(
     `
     SELECT
       COUNT(*) AS total,
-      SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) AS completed
+      SUM(
+        CASE
+          WHEN completed = 1 THEN 1
+          ELSE 0
+        END
+      ) AS completed
     FROM study_tasks
+    WHERE user_id = ?
     `,
-    [],
+    [req.user.userId],
     (err, row) => {
-
       if (err) {
-        console.error("Error calculating study progress:", err.message);
+        console.error(
+          "Error calculating study progress:",
+          err.message
+        );
 
         return res.status(500).json({
           success: false,
@@ -366,9 +382,8 @@ router.get("/progress", (req, res) => {
         completed,
         total
       });
-
     }
   );
-
 });
+
 module.exports = router;

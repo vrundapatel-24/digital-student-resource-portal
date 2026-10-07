@@ -1,9 +1,16 @@
 const express = require("express");
 const db = require("../database");
+const authenticateToken = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+router.use(authenticateToken);
+
+// ==========================================
+// GET ALL EXAMS
 // GET /api/exams
+// ==========================================
+
 router.get("/", (req, res) => {
   db.all(
     `
@@ -16,9 +23,10 @@ router.get("/", (req, res) => {
       created_at,
       updated_at
     FROM exams
+    WHERE user_id = ?
     ORDER BY exam_date ASC, id DESC
     `,
-    [],
+    [req.user.userId],
     (err, rows) => {
       if (err) {
         console.error("Error fetching exams:", err.message);
@@ -38,8 +46,11 @@ router.get("/", (req, res) => {
   );
 });
 
-
+// ==========================================
+// ADD NEW EXAM
 // POST /api/exams
+// ==========================================
+
 router.post("/", (req, res) => {
   const {
     title,
@@ -63,7 +74,10 @@ router.post("/", (req, res) => {
   }
 
   const cleanTitle = String(title).trim();
-  const cleanSubject = subject ? String(subject).trim() : "";
+  const cleanSubject = subject
+    ? String(subject).trim()
+    : "";
+
   const cleanExamDate = String(exam_date).trim();
   const reminderValue = reminder_enabled ? 1 : 0;
 
@@ -74,15 +88,17 @@ router.post("/", (req, res) => {
       title,
       subject,
       exam_date,
-      reminder_enabled
+      reminder_enabled,
+      user_id
     )
-    VALUES (?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?)
     `,
     [
       cleanTitle,
       cleanSubject,
       cleanExamDate,
-      reminderValue
+      reminderValue,
+      req.user.userId
     ],
     function (err) {
       if (err) {
@@ -108,8 +124,9 @@ router.post("/", (req, res) => {
           updated_at
         FROM exams
         WHERE id = ?
+        AND user_id = ?
         `,
-        [examId],
+        [examId, req.user.userId],
         (selectErr, exam) => {
           if (selectErr) {
             console.error(
@@ -140,7 +157,6 @@ router.post("/", (req, res) => {
 // ==========================================
 
 router.put("/:id", (req, res) => {
-
   const examId = Number(req.params.id);
 
   const {
@@ -150,7 +166,6 @@ router.put("/:id", (req, res) => {
     reminder_enabled = false
   } = req.body;
 
-  // Validate ID
   if (!Number.isInteger(examId) || examId <= 0) {
     return res.status(400).json({
       success: false,
@@ -158,7 +173,6 @@ router.put("/:id", (req, res) => {
     });
   }
 
-  // Validate title
   if (!title || !String(title).trim()) {
     return res.status(400).json({
       success: false,
@@ -166,7 +180,6 @@ router.put("/:id", (req, res) => {
     });
   }
 
-  // Validate date
   if (!exam_date || !String(exam_date).trim()) {
     return res.status(400).json({
       success: false,
@@ -174,19 +187,15 @@ router.put("/:id", (req, res) => {
     });
   }
 
-  const cleanTitle =
-    String(title).trim();
+  const cleanTitle = String(title).trim();
 
-  const cleanSubject =
-    subject
-      ? String(subject).trim()
-      : "";
+  const cleanSubject = subject
+    ? String(subject).trim()
+    : "";
 
-  const cleanExamDate =
-    String(exam_date).trim();
+  const cleanExamDate = String(exam_date).trim();
 
-  const reminderValue =
-    reminder_enabled ? 1 : 0;
+  const reminderValue = reminder_enabled ? 1 : 0;
 
   db.run(
     `
@@ -198,16 +207,17 @@ router.put("/:id", (req, res) => {
       reminder_enabled = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
+    AND user_id = ?
     `,
     [
       cleanTitle,
       cleanSubject,
       cleanExamDate,
       reminderValue,
-      examId
+      examId,
+      req.user.userId
     ],
     function (err) {
-
       if (err) {
         console.error(
           "Error updating exam:",
@@ -239,10 +249,10 @@ router.put("/:id", (req, res) => {
           updated_at
         FROM exams
         WHERE id = ?
+        AND user_id = ?
         `,
-        [examId],
+        [examId, req.user.userId],
         (selectErr, exam) => {
-
           if (selectErr) {
             console.error(
               "Error getting updated exam:",
@@ -251,29 +261,27 @@ router.put("/:id", (req, res) => {
 
             return res.status(500).json({
               success: false,
-              message:
-                "Exam updated but could not be returned."
+              message: "Exam updated but could not be returned."
             });
           }
 
           res.json({
             success: true,
-            message:
-              "Exam updated successfully.",
+            message: "Exam updated successfully.",
             exam
           });
-
         }
       );
-
     }
   );
-
 });
 
+// ==========================================
+// DELETE EXAM
 // DELETE /api/exams/:id
-router.delete("/:id", (req, res) => {
+// ==========================================
 
+router.delete("/:id", (req, res) => {
   const examId = Number(req.params.id);
 
   if (!Number.isInteger(examId) || examId <= 0) {
@@ -284,12 +292,18 @@ router.delete("/:id", (req, res) => {
   }
 
   db.run(
-    "DELETE FROM exams WHERE id = ?",
-    [examId],
+    `
+    DELETE FROM exams
+    WHERE id = ?
+    AND user_id = ?
+    `,
+    [examId, req.user.userId],
     function (err) {
-
       if (err) {
-        console.error("Error deleting exam:", err.message);
+        console.error(
+          "Error deleting exam:",
+          err.message
+        );
 
         return res.status(500).json({
           success: false,
@@ -309,10 +323,8 @@ router.delete("/:id", (req, res) => {
         message: "Exam deleted successfully.",
         deletedId: examId
       });
-
     }
   );
-
 });
 
 module.exports = router;

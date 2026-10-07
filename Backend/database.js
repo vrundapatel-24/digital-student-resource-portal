@@ -16,6 +16,20 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Enable foreign keys
 db.run("PRAGMA foreign_keys = ON");
+db.run(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )
+`, (err) => {
+  if (err) {
+    console.error("Users table creation failed:", err.message);
+  } else {
+    console.log("Users table ready.");
+  }
+});
 
 // ==========================================
 // STUDY TASKS TABLE
@@ -63,24 +77,45 @@ db.run(`
   }
 });
 
-// Export database
-// ==========================================
-// COURSES TABLE
-// ==========================================
 
 db.run(`
-  CREATE TABLE IF NOT EXISTS courses (
+  CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )
 `, (err) => {
   if (err) {
-    console.error("Error creating courses table:", err.message);
+    console.error("Users table creation failed:", err.message);
   } else {
-    console.log("Courses table is ready.");
+    console.log("Users table ready.");
+  }
+});
+// Export database
+// ==========================================
+// ADD USER ID TO PERSONAL DATA
+// ==========================================
+
+db.run(`
+  ALTER TABLE study_tasks
+  ADD COLUMN user_id INTEGER
+`, (err) => {
+  if (err && !err.message.includes("duplicate column name")) {
+    console.error("Study tasks user_id migration error:", err.message);
+  } else {
+    console.log("Study tasks user_id ready.");
+  }
+});
+
+db.run(`
+  ALTER TABLE exams
+  ADD COLUMN user_id INTEGER
+`, (err) => {
+  if (err && !err.message.includes("duplicate column name")) {
+    console.error("Exams user_id migration error:", err.message);
+  } else {
+    console.log("Exams user_id ready.");
   }
 });
 module.exports = db;

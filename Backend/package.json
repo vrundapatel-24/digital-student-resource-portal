@@ -10,9 +10,11 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
     "@aws-sdk/s3-request-presigner": "^3.1141.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
     "sqlite3": "^5.1.7"
   }
 }

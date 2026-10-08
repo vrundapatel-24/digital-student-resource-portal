@@ -16,6 +16,11 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Enable foreign keys
 db.run("PRAGMA foreign_keys = ON");
+
+// ==========================================
+// USERS TABLE
+// ==========================================
+
 db.run(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +57,25 @@ db.run(`
     console.error("Error creating study_tasks table:", err.message);
   } else {
     console.log("Study tasks table is ready.");
+
+    // Add user_id after table exists
+    db.run(`
+      ALTER TABLE study_tasks
+      ADD COLUMN user_id INTEGER
+    `, (migrationErr) => {
+      if (migrationErr) {
+        if (migrationErr.message.includes("duplicate column name")) {
+          console.log("Study tasks user_id already exists.");
+        } else {
+          console.error(
+            "Study tasks user_id migration error:",
+            migrationErr.message
+          );
+        }
+      } else {
+        console.log("Study tasks user_id added.");
+      }
+    });
   }
 });
 
@@ -74,48 +98,30 @@ db.run(`
     console.error("Error creating exams table:", err.message);
   } else {
     console.log("Exams table is ready.");
+
+    // Add user_id after table exists
+    db.run(`
+      ALTER TABLE exams
+      ADD COLUMN user_id INTEGER
+    `, (migrationErr) => {
+      if (migrationErr) {
+        if (migrationErr.message.includes("duplicate column name")) {
+          console.log("Exams user_id already exists.");
+        } else {
+          console.error(
+            "Exams user_id migration error:",
+            migrationErr.message
+          );
+        }
+      } else {
+        console.log("Exams user_id added.");
+      }
+    });
   }
 });
 
-
-db.run(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )
-`, (err) => {
-  if (err) {
-    console.error("Users table creation failed:", err.message);
-  } else {
-    console.log("Users table ready.");
-  }
-});
-// Export database
 // ==========================================
-// ADD USER ID TO PERSONAL DATA
+// EXPORT DATABASE
 // ==========================================
 
-db.run(`
-  ALTER TABLE study_tasks
-  ADD COLUMN user_id INTEGER
-`, (err) => {
-  if (err && !err.message.includes("duplicate column name")) {
-    console.error("Study tasks user_id migration error:", err.message);
-  } else {
-    console.log("Study tasks user_id ready.");
-  }
-});
-
-db.run(`
-  ALTER TABLE exams
-  ADD COLUMN user_id INTEGER
-`, (err) => {
-  if (err && !err.message.includes("duplicate column name")) {
-    console.error("Exams user_id migration error:", err.message);
-  } else {
-    console.log("Exams user_id ready.");
-  }
-});
 module.exports = db;
